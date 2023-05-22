@@ -246,7 +246,8 @@ def spectral_density_lite(
 
     # Recast as real: imaginary part is already zero
     Skw = np.real(np.sum(econtr, axis=0) + np.sum(icontr, axis=0))
-
+    # Relativistic change
+    Skw = Skw * (1+(2*w/wl))
     # Apply an instrument function if one is provided
     if instr_func_arr is not None:
         Skw = np.convolve(Skw, instr_func_arr, mode="same")
@@ -429,7 +430,8 @@ def spectral_density(  # noqa: C901, PLR0912, PLR0915
     else:
         ifract = np.asarray(ifract, dtype=np.float64)
         if np.sum(ifract) != 1:
-            raise ValueError(f"The provided ifract does not sum to 1: {ifract}")
+            ifract = ifract / np.sum(ifract)
+            #raise ValueError(f"The provided ifract does not sum to 1: {ifract}")
 
     if probe_vec is None:
         probe_vec = np.array([1, 0, 0])
