@@ -695,20 +695,24 @@ class Particle(AbstractPhysicalParticle):
         if self.symbol == "p+":
             categories.update({"element", "isotope", "ion"})
 
-        _, mass_numb, Z = self.__inputs
+        argument, mass_numb, Z = self.__inputs
 
-        if mass_numb is not None or Z is not None:
-            if self.symbol == "p+" and 1 in (mass_numb, Z):
-                warnings.warn(
-                    "Redundant mass number or charge information.", ParticleWarning
-                )
-            else:
-                raise InvalidParticleError(
-                    "The keywords 'mass_numb' and 'Z' cannot be used when "
-                    "creating Particle objects for special particles. To "
-                    f"create a Particle object for {attributes['name']}s, "
-                    f"use:  Particle({attributes['particle']!r})"
-                )
+        if mass_numb is None and Z is None:
+            return
+
+        if self.symbol != "p+":
+            raise InvalidParticleError(
+                "The keywords 'mass_numb' and 'Z' cannot be used when "
+                "creating Particle objects for special particles. To "
+                f"create a Particle object for {attributes['name']}s, "
+                f"use: Particle({attributes['particle']!r})"
+            )
+
+        if mass_numb not in (1, None) or Z not in (1, None):
+            raise InvalidParticleError(
+                "Cannot create a Particle representing a proton for a "
+                "mass number or charge number not equal to 1."
+            )
 
     def _assign_atom_attributes(self) -> NoReturn:
         """Assign attributes and categories to elements, isotopes, and ions."""
@@ -743,16 +747,16 @@ class Particle(AbstractPhysicalParticle):
             this_isotope = _isotopes.data_about_isotopes[isotope]
 
             attributes["baryon number"] = this_isotope["mass number"]
-            attributes["isotope mass"] = this_isotope.get("mass", None)
+            attributes["isotope mass"] = this_isotope.get("mass")
             attributes["isotopic abundance"] = this_isotope.get("abundance", 0.0)
 
             if this_isotope["stable"]:
                 attributes["half-life"] = np.inf * u.s
             else:
-                attributes["half-life"] = this_isotope.get("half-life", None)
+                attributes["half-life"] = this_isotope.get("half-life")
 
         if element and not isotope:
-            attributes["standard atomic weight"] = this_element.get("atomic mass", None)
+            attributes["standard atomic weight"] = this_element.get("atomic mass")
 
         if ion in _special_particles.special_ion_masses:
             attributes["mass"] = _special_particles.special_ion_masses[ion]
@@ -1730,11 +1734,11 @@ class Particle(AbstractPhysicalParticle):
                 f"Cannot ionize {self.symbol} because it is not a "
                 f"neutral atom or ion."
             )
-        if not self.is_category(any_of={"charged", "uncharged"}):
-            assumed_charge_number = 0
-        else:
-            assumed_charge_number = self.charge_number
-
+        assumed_charge_number = (
+            self.charge_number
+            if self.is_category(any_of={"charged", "uncharged"})
+            else 0
+        )
         if assumed_charge_number == self.atomic_number:
             raise InvalidIonError(
                 f"The particle {self.symbol} is already fully "
@@ -1905,7 +1909,9 @@ class DimensionlessParticle(AbstractParticle):
         elif isinstance(obj, bool):
             raise TypeError("Expecting a real number, not a bool.")
         elif isinstance(obj, u.Quantity) and not isinstance(obj.value, Real):
-            raise ValueError("The value of a Quantity must be a real number.")
+            raise ValueError(  # noqa: TRY004
+                "The value of a Quantity must be a real number."
+            )
 
         try:
             new_obj = np.float64(obj)

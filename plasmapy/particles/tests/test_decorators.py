@@ -1,8 +1,10 @@
+import astropy.constants as const
 import astropy.units as u
 import inspect
 import pytest
 import sys
 
+from numbers import Real
 from typing import Optional
 
 from plasmapy.particles import ParticleList
@@ -16,6 +18,7 @@ from plasmapy.particles.exceptions import (
     ParticleError,
 )
 from plasmapy.particles.particle_class import CustomParticle, Particle, ParticleLike
+from plasmapy.utils import PlasmaPyDeprecationWarning
 from plasmapy.utils.code_repr import call_string
 from plasmapy.utils.decorators.validators import validate_quantities
 
@@ -75,7 +78,7 @@ particle_input_simple_table = [
         function_decorated_with_particle_input,
     ],
 )
-@pytest.mark.parametrize("args, kwargs, symbol", particle_input_simple_table)
+@pytest.mark.parametrize(("args", "kwargs", "symbol"), particle_input_simple_table)
 def test_particle_input_simple(func, args, kwargs, symbol):
     """
     Test that simple functions decorated by particle_input correctly
@@ -114,7 +117,9 @@ particle_input_error_table = [
 ]
 
 
-@pytest.mark.parametrize("func, kwargs, expected_error", particle_input_error_table)
+@pytest.mark.parametrize(
+    ("func", "kwargs", "expected_error"), particle_input_error_table
+)
 def test_particle_input_errors(func, kwargs, expected_error):
     """
     Test that functions decorated with `@particle_input` raise the
@@ -175,7 +180,6 @@ def ambiguous_keywords(p1: ParticleLike, p2: ParticleLike, Z=None, mass_numb=Non
     A trivial function with two annotated arguments plus the keyword
     arguments ``Z`` and ``mass_numb``.
     """
-    pass
 
 
 ambiguous_arguments = [
@@ -185,7 +189,7 @@ ambiguous_arguments = [
 ]
 
 
-@pytest.mark.parametrize("args, kwargs", ambiguous_arguments)
+@pytest.mark.parametrize(("args", "kwargs"), ambiguous_arguments)
 def test_function_with_ambiguity(args, kwargs):
     """
     Test that a function decorated with particle_input that has two
@@ -249,7 +253,7 @@ categorization_particle_exception = [
 
 
 @pytest.mark.parametrize(
-    "categorization, particle, exception", categorization_particle_exception
+    ("categorization", "particle", "exception"), categorization_particle_exception
 )
 def test_decorator_categories(categorization, particle, exception):
     """
@@ -304,7 +308,7 @@ decorator_pairs = [
 ]
 
 
-@pytest.mark.parametrize("decorator1, decorator2", decorator_pairs)
+@pytest.mark.parametrize(("decorator1", "decorator2"), decorator_pairs)
 def test_stacking_decorators(decorator1, decorator2):
     """
     Test that particle_input and validate_quantities can be stacked in
@@ -324,7 +328,7 @@ def test_stacking_decorators(decorator1, decorator2):
     assert distance_1_2 == distance_2_1 == 3 * u.cm
 
 
-@pytest.mark.parametrize("decorator1, decorator2", decorator_pairs)
+@pytest.mark.parametrize(("decorator1", "decorator2"), decorator_pairs)
 def test_preserving_signature_with_stacked_decorators(decorator1, decorator2):
     """
     Test that |particle_input| & |validate_quantities| preserve the
@@ -412,12 +416,26 @@ def test_annotated_init():
 
 
 @pytest.mark.parametrize(
-    "outer_decorator, inner_decorator",
+    ("outer_decorator", "inner_decorator"),
     [
         (particle_input, validate_quantities_),
         (particle_input(), validate_quantities_),
-        pytest.param(validate_quantities_, particle_input, marks=pytest.mark.xfail),
-        pytest.param(validate_quantities_, particle_input(), marks=pytest.mark.xfail),
+        pytest.param(
+            validate_quantities_,
+            particle_input,
+            marks=pytest.mark.xfail(
+                reason="For instance methods, particle_input must currently "
+                "be the outer decorator. See #2035."
+            ),
+        ),
+        pytest.param(
+            validate_quantities_,
+            particle_input(),
+            marks=pytest.mark.xfail(
+                reason="For instance methods, particle_input must currently "
+                "be the outer decorator. See #2035."
+            ),
+        ),
     ],
 )
 def test_particle_input_with_validate_quantities(outer_decorator, inner_decorator):
@@ -452,7 +470,9 @@ kwargs_to_decorator_and_args = [
 ]
 
 
-@pytest.mark.parametrize("kwargs_to_particle_input, arg", kwargs_to_decorator_and_args)
+@pytest.mark.parametrize(
+    ("kwargs_to_particle_input", "arg"), kwargs_to_decorator_and_args
+)
 def test_particle_input_verification(kwargs_to_particle_input, arg):
     """Test the allow_custom_particles keyword argument to particle_input."""
 
@@ -499,7 +519,7 @@ def get_isotope(isotope: ParticleLike):
 
 
 @particle_input
-def get_ion(ion: ParticleLike):
+def get_ion(ion: ParticleLike, Z: Real = None):
     return ion
 
 
@@ -525,13 +545,6 @@ cases = [
         particles_not_in_category=["D", "T", "H-1", "He-4", "e-", "e+", "n"],
         exception=InvalidIonError,
     ),
-    ParameterNamesCase(
-        category="ionic_level",
-        function=get_ion,
-        particles_in_category=["p+", "D+", "T+", "alpha", "Be-8+", "Fe 26+"],
-        particles_not_in_category=["D", "T", "H-1", "He-4", "e-", "e+", "n"],
-        exception=InvalidIonError,
-    ),
 ]
 
 
@@ -539,9 +552,9 @@ cases = [
 class TestParticleInputParameterNames:
     """
     Test the behavior associated with annotated special parameter names
-    such as ``element``, ``isotope``, ``ion``, and ``ionic_level``. In
-    particular, make sure that the resulting particle(s) belong to the
-    expected categories.
+    such as ``element``, ``isotope``, and ``ion``. In particular, make
+    sure that the resulting particle(s) belong to the expected
+    categories.
     """
 
     def test_individual_particles_not_in_category(self, case):
@@ -589,3 +602,52 @@ class TestParticleInputParameterNames:
         with multiple particles at once which are all in the category.
         """
         case.function(case.particles_in_category)
+
+
+def test_custom_particle_for_parameter_named_ion():
+    """
+    Test that a positively charged CustomParticle is treated as a valid
+    ion when the parameter is named ``ion``.
+    """
+    custom_ion = CustomParticle(mass=2e-27 * u.kg, charge=3e-19 * u.C)
+    result = get_ion(custom_ion)
+    assert result == custom_ion
+
+
+def test_creating_mean_particle_for_parameter_named_ion():
+    Z = 1.3
+    ion = get_ion(ion="He", Z=Z)
+    assert u.isclose(ion.charge, Z * const.e.si)
+
+
+@particle_input
+def return_particle(particle: ParticleLike, Z=None, mass_numb=None):
+    """A simple function that is decorated by particle_input."""
+    return particle
+
+
+def test_particle_input_warning_for_integer_z_mean():
+    """
+    Test that if a function decorated by `particle_input` is passed
+    an integer called `z_mean`, then `z_mean` becomes `Z` and a warning
+    is issued.
+    """
+    with pytest.warns(PlasmaPyDeprecationWarning):
+        result = return_particle("H", z_mean=1, mass_numb=1)
+    assert result == "p+"
+
+
+def test_particle_input_warning_for_float_z_mean():
+    """
+    Test that if a function decorated by `particle_input` is passed
+    a float called `z_mean`, then `z_mean` becomes `Z` and a warning
+    is issued.
+    """
+    z_mean = 0.432
+
+    with pytest.warns(PlasmaPyDeprecationWarning):
+        result = return_particle("H", z_mean=z_mean, mass_numb=1)
+
+    Z = result.charge / const.e.si
+
+    assert u.isclose(Z, z_mean)

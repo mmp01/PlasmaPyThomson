@@ -198,7 +198,7 @@ tests_for_exceptions = {
 
 
 @pytest.mark.parametrize(
-    ["tested_object", "args", "kwargs", "expected_exception"],
+    ("tested_object", "args", "kwargs", "expected_exception"),
     list(tests_for_exceptions.values()),
     ids=list(tests_for_exceptions.keys()),
 )
@@ -953,7 +953,6 @@ tests_from_atomic = [
     [isotope_symbol, ("Li-6",), {"mass_numb": 6}, pytest.warns(ParticleWarning)],
     [isotope_symbol, ("lithium-6",), {"mass_numb": 6}, pytest.warns(ParticleWarning)],
     [isotope_symbol, ("alpha",), {"mass_numb": 4}, pytest.warns(ParticleWarning)],
-    [isotope_symbol, ("p",), {"mass_numb": 1}, pytest.warns(ParticleWarning)],
 ]
 
 
@@ -1024,7 +1023,7 @@ type_error_tests = [
 
 
 @pytest.mark.parametrize(
-    ["tested_object", "args", "kwargs", "expected"],
+    ("tested_object", "args", "kwargs", "expected"),
     tests_from_nuclear + tests_from_atomic + particle_error_tests + type_error_tests,
 )
 def test_unnamed_tests_exceptions(tested_object, args, kwargs, expected):
