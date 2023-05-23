@@ -234,7 +234,8 @@ def spectral_density_lite(
 
     icontr = np.zeros([ifract.size, w.size], dtype=np.complex128)
     for m in range(ifract.size):
-        icontr[m, :] = ifract[m] * (
+        
+        icontr[m, :] = (ni[m]*ion_z[m]/n) * (
             2
             * np.sqrt(np.pi)
             * ion_z[m]
@@ -243,6 +244,15 @@ def spectral_density_lite(
             * np.power(np.abs(np.sum(chiE, axis=0) / epsilon), 2)
             * np.exp(-xi[m, :] ** 2)
         )
+        #icontr[m, :] = ifract[m] * (
+        #    2
+        #    * np.sqrt(np.pi)
+        #    * ion_z[m]
+        #    / k
+        #    / vT_i[m]
+        #    * np.power(np.abs(np.sum(chiE, axis=0) / epsilon), 2)
+        #    * np.exp(-xi[m, :] ** 2)
+        #)
 
     # Recast as real: imaginary part is already zero
     Skw = np.real(np.sum(econtr, axis=0) + np.sum(icontr, axis=0))
